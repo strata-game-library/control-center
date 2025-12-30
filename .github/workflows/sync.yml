@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'repository-files/**'
+      - 'repo-config.json'
+      - 'scripts/**'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -18,7 +20,7 @@ permissions:
 
 jobs:
   sync:
-    name: Sync to Org Repos
+    name: Sync Ecosystem
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,60 +30,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install vendor-connectors
+      - name: Install dependencies
         run: pip install vendor-connectors
 
-      - name: Sync files to org repos
+      - name: Run sync script
         env:
           GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
           DRY_RUN: ${{ inputs.dry_run }}
-          ORG: strata-game-library
-        run: |
-          echo "Syncing Strata Ecosystem..."
-          
-          # Get all repos using vendor-connectors
-          REPOS=$(python3 -c "from vendor_connectors import GithubConnector; print(' '.join([r['name'] for r in GithubConnector().list_repositories(org='$ORG') if not r.get('isArchived', False)]))")
-          
-          for repo in $REPOS; do
-            [[ "$repo" == "control-center" ]] && continue
-            [[ "$repo" == ".github" ]] && continue
-            
-            echo "📦 $ORG/$repo"
-            
-            # PHASE 1: Always Sync (Overwrite)
-            find repository-files/always-sync -type f | while read -r file; do
-              rel_path="${file#repository-files/always-sync/}"
-              if [[ "$DRY_RUN" == "true" ]]; then
-                echo "  [ALWAYS] Would sync: $rel_path"
-              else
-                # Get SHA for update
-                SHA=$(gh api "repos/$ORG/$repo/contents/$rel_path" --jq '.sha' 2>/dev/null || echo "")
-                
-                vendor-connectors call github update_repository_file \
-                  --github_owner "$ORG" \
-                  --github_repo "$repo" \
-                  --file_path "$rel_path" \
-                  --file_data "$(cat "$file")" \
-                  ${SHA:+--file_sha "$SHA"} \
-                  --msg "chore(sync): update from control-center" > /dev/null && echo "  ✅ $rel_path" || echo "  ❌ $rel_path"
-              fi
-            done
-            
-            # PHASE 2: Initial Only (Create missing)
-            find repository-files/initial-only -type f | while read -r file; do
-              rel_path="${file#repository-files/initial-only/}"
-              if [[ "$DRY_RUN" == "true" ]]; then
-                echo "  [INITIAL] Would check: $rel_path"
-              else
-                EXISTS=$(gh api "repos/$ORG/$repo/contents/$rel_path" --jq '.name' 2>/dev/null || echo "")
-                if [ -z "$EXISTS" ]; then
-                  vendor-connectors call github update_repository_file \
-                    --github_owner "$ORG" \
-                    --github_repo "$repo" \
-                    --file_path "$rel_path" \
-                    --file_data "$(cat "$file")" \
-                    --msg "chore(init): bootstrap from control-center" > /dev/null && echo "  ✨ $rel_path (initialized)" || echo "  ❌ $rel_path"
-                fi
-              fi
-            done
-          done
+        run: ./scripts/sync-repos.py

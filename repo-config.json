@@ -1,0 +1,96 @@
+{
+  "organization": "strata-game-library",
+  "defaults": {
+    "visibility": "public",
+    "has_issues": true,
+    "has_wiki": false,
+    "has_projects": true,
+    "delete_branch_on_merge": true
+  },
+  "repositories": [
+    {
+      "name": "core",
+      "type": "library",
+      "category": "core",
+      "description": "Procedural 3D graphics library for React Three Fiber",
+      "sync": true
+    },
+    {
+      "name": "shaders",
+      "type": "library",
+      "category": "core",
+      "description": "GLSL shader collection for Strata 3D",
+      "sync": true
+    },
+    {
+      "name": "audio-synth",
+      "type": "library",
+      "category": "core",
+      "description": "Procedural audio synthesis using Tone.js",
+      "sync": true
+    },
+    {
+      "name": "model-synth",
+      "type": "library",
+      "category": "core",
+      "description": "Procedural 3D model generation",
+      "sync": true
+    },
+    {
+      "name": "react-native-plugin",
+      "type": "plugin",
+      "category": "plugins",
+      "description": "React Native plugin for Strata 3D",
+      "sync": true
+    },
+    {
+      "name": "capacitor-plugin",
+      "type": "plugin",
+      "category": "plugins",
+      "description": "Capacitor plugin for Strata 3D",
+      "sync": true
+    },
+    {
+      "name": "examples",
+      "type": "examples",
+      "category": "examples",
+      "description": "Example applications for Strata 3D",
+      "sync": true
+    },
+    {
+      "name": "typescript-tutor",
+      "type": "app",
+      "category": "education",
+      "description": "Interactive lessons for learning game development",
+      "sync": true
+    },
+    {
+      "name": "presets",
+      "type": "data",
+      "category": "core",
+      "description": "Preset configurations for Strata 3D",
+      "sync": true
+    },
+    {
+      "name": "strata-game-library.github.io",
+      "type": "docs",
+      "category": "infrastructure",
+      "description": "Strata documentation and showcase site",
+      "sync": true
+    },
+    {
+      "name": "control-center",
+      "type": "infrastructure",
+      "category": "infrastructure",
+      "description": "Control center for organization management",
+      "sync": false
+    },
+    {
+      "name": ".github",
+      "type": "infrastructure",
+      "category": "infrastructure",
+      "description": "Organization-wide GitHub settings",
+      "sync": false
+    }
+  ]
+}

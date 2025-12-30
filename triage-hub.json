@@ -1,0 +1,29 @@
+{
+  "organization": "strata-game-library",
+  "hubs": [
+    {
+      "name": "core-engine",
+      "repos": ["core", "shaders", "presets"],
+      "priority_labels": ["bug", "performance", "high-priority"],
+      "description": "Core 3D engine and graphics systems"
+    },
+    {
+      "name": "content-synthesis",
+      "repos": ["audio-synth", "model-synth"],
+      "priority_labels": ["bug", "enhancement"],
+      "description": "Procedural asset generation systems"
+    },
+    {
+      "name": "plugins-mobile",
+      "repos": ["react-native-plugin", "capacitor-plugin"],
+      "priority_labels": ["bug", "mobile-specific"],
+      "description": "Mobile and cross-platform bridges"
+    },
+    {
+      "name": "docs-and-showcase",
+      "repos": ["strata-game-library.github.io", "examples", "typescript-tutor"],
+      "priority_labels": ["documentation", "bug", "showcase"],
+      "description": "Documentation, tutorials, and demos"
+    }
+  ]
+}
