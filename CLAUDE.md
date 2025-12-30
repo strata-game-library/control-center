@@ -9,6 +9,8 @@ This is the **Orchestrator** for the entire Strata organization. It manages:
 - AI agentic rules and workflows
 - Documentation flow for the whole org
 
+The control-center follows the **Parent-Child** pattern established in `jbcom/control-center`.
+
 ## Development Commands
 
 ```bash
