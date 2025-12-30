@@ -1,0 +1,31 @@
+{
+  "ecosystems": {
+    "strata": {
+      "organization": "strata-game-library",
+      "repos": [
+        "core",
+        "shaders",
+        "audio-synth",
+        "model-synth",
+        "react-native-plugin",
+        "capacitor-plugin",
+        "examples",
+        "typescript-tutor",
+        "presets",
+        "strata-game-library.github.io"
+      ]
+    }
+  },
+  "repository_descriptions": {
+    "core": "Procedural 3D graphics library for React Three Fiber",
+    "shaders": "GLSL shader collection for Strata 3D",
+    "audio-synth": "Procedural audio synthesis using Tone.js",
+    "model-synth": "Procedural 3D model generation",
+    "react-native-plugin": "React Native plugin for Strata 3D",
+    "capacitor-plugin": "Capacitor plugin for Strata 3D",
+    "examples": "Example applications for Strata 3D",
+    "typescript-tutor": "Interactive lessons for learning game development",
+    "presets": "Preset configurations for Strata 3D",
+    "strata-game-library.github.io": "Strata documentation and showcase site"
+  }
+}

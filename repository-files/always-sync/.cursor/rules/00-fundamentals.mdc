@@ -1,0 +1,37 @@
+---
+description: Fundamental rules for all Strata repositories
+globs: "**/*"
+alwaysApply: true
+---
+
+# 🌌 Strata Fundamentals
+
+## Core Principles
+
+1. **Performance First** - Every 3D/WebGL change must consider framerate and memory.
+2. **Read Before Modifying** - Always read the context and existing patterns before editing.
+3. **Verify Everything** - Run `pnpm check` (lint + typecheck) after changes.
+4. **No React in Core** - `src/core/` must have **ZERO** React imports. Pure TypeScript only.
+
+## Development Workflow
+
+1. **Memory Bank** - Maintain `memory-bank/*.md` to track context across sessions.
+2. **One Concern per Commit** - Keep changes focused and atomic.
+3. **Ghost Testing** - Use `agentic-dev-library` for testing when available.
+
+## Authentication
+
+```bash
+# ALWAYS use CI_GITHUB_TOKEN or GH_TOKEN
+GH_TOKEN="$GITHUB_TOKEN" gh <command>
+```
+
+## Session Management
+
+```bash
+# Start of session
+cat memory-bank/activeContext.md 2>/dev/null || echo "No memory bank"
+
+# End of session
+echo "## Session: $(date +%Y-%m-%d)" >> memory-bank/activeContext.md
+```

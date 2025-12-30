@@ -1,0 +1,35 @@
+# Always-Sync Configuration for strata-game-library
+# These files are synced on EVERY run and OVERWRITE existing files
+#
+# Documentation: https://github.com/BetaHuhn/repo-file-sync-action
+
+group:
+  - files:
+      # Cursor rules (always overwrite)
+      - source: repository-files/always-sync/.cursor/rules/
+        dest: .cursor/rules/
+        deleteOrphaned: true
+      
+      # GitHub workflows (shared)
+      - source: repository-files/always-sync/.github/workflows/ci.yml
+        dest: .github/workflows/ci.yml
+      - source: repository-files/always-sync/.github/workflows/docs-push.yml
+        dest: .github/workflows/docs-push.yml
+      - source: repository-files/always-sync/.github/workflows/ecosystem-connector.yml
+        dest: .github/workflows/ecosystem-connector.yml
+      
+      # Agentic Instructions
+      - source: repository-files/always-sync/AGENTS.md
+        dest: AGENTS.md
+
+    repos: |
+      strata-game-library/core
+      strata-game-library/shaders
+      strata-game-library/audio-synth
+      strata-game-library/model-synth
+      strata-game-library/react-native-plugin
+      strata-game-library/capacitor-plugin
+      strata-game-library/examples
+      strata-game-library/typescript-tutor
+      strata-game-library/presets
+      strata-game-library/strata-game-library.github.io

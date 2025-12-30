@@ -1,10 +1,14 @@
-name: Sync Files
+name: Ecosystem Sync
 
 on:
   push:
     branches: [main]
     paths:
       - 'repository-files/**'
+      - 'repo-config.json'
+      - 'scripts/**'
+      - '.github/sync-always.yml'
+      - '.github/sync-initial.yml'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -16,51 +20,73 @@ permissions:
   contents: read
 
 jobs:
+  validate:
+    name: Validate Configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate config
+        run: |
+          chmod +x scripts/validate-config scripts/check-symlinks
+          ./scripts/validate-config
+          ./scripts/check-symlinks
+
+  phase-0-create-repos:
+    name: Phase 0 - Create Repos
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create missing repositories
+        env:
+          GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+        run: |
+          chmod +x scripts/create-repos
+          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+            ./scripts/create-repos --dry-run --verbose
+          else
+            ./scripts/create-repos --verbose
+          fi
+
   sync:
-    name: Sync to Org Repos
+    name: Sync Ecosystem
+    needs: phase-0-create-repos
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Sync files to org repos
+      # PHASE 1: Initial Sync (Only create if missing)
+      - name: Phase 1 - Initial Sync
+        uses: BetaHuhn/repo-file-sync-action@v1
+        with:
+          GH_PAT: ${{ secrets.CI_GITHUB_TOKEN }}
+          CONFIG_PATH: .github/sync-initial.yml
+          DRY_RUN: ${{ github.event.inputs.dry_run == 'true' }}
+          SKIP_PR: true
+          COMMIT_PREFIX: 'chore(init):'
+          COMMIT_BODY: 'Initial setup from control-center.'
+
+      # PHASE 2: Always Sync (Overwrite with latest)
+      - name: Phase 2 - Always Sync
+        uses: BetaHuhn/repo-file-sync-action@v1
+        with:
+          GH_PAT: ${{ secrets.CI_GITHUB_TOKEN }}
+          CONFIG_PATH: .github/sync-always.yml
+          DRY_RUN: ${{ github.event.inputs.dry_run == 'true' }}
+          SKIP_PR: true
+          COMMIT_PREFIX: 'chore(sync):'
+          COMMIT_BODY: 'Sync shared configurations from control-center.'
+
+  sync-projects:
+    name: Sync Projects
+    needs: sync
+    runs-on: ubuntu-latest
+    if: always() && github.event.inputs.dry_run != 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync issues to projects
         env:
           GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
-          DRY_RUN: ${{ inputs.dry_run }}
-          ORG: strata-game-library
         run: |
-          echo "Syncing repository-files to all $ORG repos..."
-          
-          # Get list of repos
-          repos=$(gh repo list "$ORG" --limit 100 --json name,isArchived --jq '.[] | select(.isArchived == false) | .name')
-          
-          for repo in $repos; do
-            # Skip control-center itself
-            [[ "$repo" == "control-center" ]] && continue
-            [[ "$repo" == ".github" ]] && continue
-            
-            echo "📦 $ORG/$repo"
-            
-            # Sync each file from repository-files/always-sync
-            find repository-files/always-sync -type f | while read -r file; do
-              rel_path="${file#repository-files/always-sync/}"
-              
-              if [[ "$DRY_RUN" == "true" ]]; then
-                echo "  Would sync: $rel_path"
-              else
-                content=$(base64 -w0 "$file")
-                sha=$(gh api "repos/$ORG/$repo/contents/$rel_path" --jq '.sha' 2>/dev/null || echo "")
-                
-                if [ -n "$sha" ]; then
-                  gh api -X PUT "repos/$ORG/$repo/contents/$rel_path" \
-                    -f message="chore: sync from control-center" \
-                    -f content="$content" \
-                    -f sha="$sha" >/dev/null 2>&1 && echo "  ✅ $rel_path" || echo "  ❌ $rel_path"
-                else
-                  gh api -X PUT "repos/$ORG/$repo/contents/$rel_path" \
-                    -f message="chore: sync from control-center" \
-                    -f content="$content" >/dev/null 2>&1 && echo "  ✅ $rel_path" || echo "  ❌ $rel_path"
-                fi
-              fi
-            done
-          done
-
+          chmod +x scripts/sync-projects
+          ./scripts/sync-projects --verbose

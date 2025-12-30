@@ -1,0 +1,30 @@
+# Initial-Only Sync Configuration for strata-game-library
+# These files are synced ONLY IF THEY DON'T EXIST in the target repository
+#
+# Documentation: https://github.com/BetaHuhn/repo-file-sync-action
+# Key setting: replace: false - prevents overwriting existing files
+
+group:
+  - files:
+      # Basic project templates
+      - source: repository-files/initial-only/package.json
+        dest: package.json
+        replace: false
+      - source: repository-files/initial-only/tsconfig.json
+        dest: tsconfig.json
+        replace: false
+      - source: repository-files/initial-only/README.md
+        dest: README.md
+        replace: false
+
+    repos: |
+      strata-game-library/core
+      strata-game-library/shaders
+      strata-game-library/audio-synth
+      strata-game-library/model-synth
+      strata-game-library/react-native-plugin
+      strata-game-library/capacitor-plugin
+      strata-game-library/examples
+      strata-game-library/typescript-tutor
+      strata-game-library/presets
+      strata-game-library/strata-game-library.github.io

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# =============================================================================
+# validate-config - Basic validation for repo-config.json
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="${SCRIPT_DIR}/../repo-config.json"
+
+if [[ ! -f "$CONFIG_FILE" ]]; then
+  echo "❌ repo-config.json missing"
+  exit 1
+fi
+
+if ! jq . "$CONFIG_FILE" >/dev/null 2>&1; then
+  echo "❌ repo-config.json is not valid JSON"
+  exit 1
+fi
+
+ECOSYSTEMS=$(jq -r '.ecosystems | length' "$CONFIG_FILE")
+if [[ "$ECOSYSTEMS" -eq 0 ]]; then
+  echo "❌ No ecosystems defined in repo-config.json"
+  exit 1
+fi
+
+echo "✅ repo-config.json is valid"
