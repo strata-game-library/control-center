@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# =============================================================================
+# create-repos - Idempotently create GitHub repositories from repo-config.json
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="${SCRIPT_DIR}/.."
+CONFIG_FILE="${REPO_ROOT}/repo-config.json"
+DEFAULT_ORG="strata-game-library"
+
+DRY_RUN=false
+VERBOSE=false
+
+log_info()  { echo -e "\033[0;34m[INFO]\033[0m $*"; }
+log_ok()    { echo -e "\033[0;32m[OK]\033[0m $*"; }
+log_warn()  { echo -e "\033[1;33m[WARN]\033[0m $*"; }
+log_error() { echo -e "\033[0;31m[ERROR]\033[0m $*" >&2; }
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run) DRY_RUN=true; shift ;;
+    --verbose|-v) VERBOSE=true; shift ;;
+    *) log_error "Unknown option: $1"; exit 1 ;;
+  esac
+done
+
+repo_exists() {
+  gh repo view "$1/$2" &>/dev/null
+}
+
+get_repo_description() {
+  jq -r --arg repo "$1" '.repository_descriptions[$repo] // "Strata repository: \($repo)"' "$CONFIG_FILE"
+}
+
+create_repo() {
+  local org="$1"
+  local repo="$2"
+  local description
+  description=$(get_repo_description "$repo")
+  
+  if repo_exists "$org" "$repo"; then
+    [[ "$VERBOSE" == "true" ]] && log_info "Repository ${org}/${repo} already exists"
+    return 0
+  fi
+  
+  log_info "Creating repository: ${org}/${repo}"
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_warn "[DRY RUN] Would create: ${org}/${repo}"
+    return 0
+  fi
+  
+  if gh repo create "${org}/${repo}" --public --description "$description" --add-readme; then
+    log_ok "Created: ${org}/${repo}"
+  else
+    log_error "Failed to create: ${org}/${repo}"
+    return 1
+  fi
+}
+
+main() {
+  export GH_TOKEN="${GH_TOKEN:-$GITHUB_TOKEN}"
+  
+  local ecosystems
+  ecosystems=$(jq -r '.ecosystems | keys[]' "$CONFIG_FILE")
+  
+  for ecosystem in $ecosystems; do
+    local org
+    org=$(jq -r --arg ecosystem "$ecosystem" ".ecosystems[\$ecosystem].organization // \"$DEFAULT_ORG\"" "$CONFIG_FILE")
+    local repos
+    repos=$(jq -r --arg ecosystem "$ecosystem" ".ecosystems[\$ecosystem].repos[]" "$CONFIG_FILE")
+    
+    for repo in $repos; do
+      create_repo "$org" "$repo"
+    done
+  done
+}
+
+main

@@ -7,6 +7,8 @@ on:
       - 'repository-files/**'
       - 'repo-config.json'
       - 'scripts/**'
+      - '.github/sync-always.yml'
+      - '.github/sync-initial.yml'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -16,25 +18,75 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
+  validate:
+    name: Validate Configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate config
+        run: |
+          chmod +x scripts/validate-config scripts/check-symlinks
+          ./scripts/validate-config
+          ./scripts/check-symlinks
+
+  phase-0-create-repos:
+    name: Phase 0 - Create Repos
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create missing repositories
+        env:
+          GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+        run: |
+          chmod +x scripts/create-repos
+          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+            ./scripts/create-repos --dry-run --verbose
+          else
+            ./scripts/create-repos --verbose
+          fi
+
   sync:
     name: Sync Ecosystem
+    needs: phase-0-create-repos
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      # PHASE 1: Initial Sync (Only create if missing)
+      - name: Phase 1 - Initial Sync
+        uses: BetaHuhn/repo-file-sync-action@v1
         with:
-          python-version: "3.12"
+          GH_PAT: ${{ secrets.CI_GITHUB_TOKEN }}
+          CONFIG_PATH: .github/sync-initial.yml
+          DRY_RUN: ${{ github.event.inputs.dry_run == 'true' }}
+          SKIP_PR: true
+          COMMIT_PREFIX: 'chore(init):'
+          COMMIT_BODY: 'Initial setup from control-center.'
 
-      - name: Install dependencies
-        run: pip install vendor-connectors
+      # PHASE 2: Always Sync (Overwrite with latest)
+      - name: Phase 2 - Always Sync
+        uses: BetaHuhn/repo-file-sync-action@v1
+        with:
+          GH_PAT: ${{ secrets.CI_GITHUB_TOKEN }}
+          CONFIG_PATH: .github/sync-always.yml
+          DRY_RUN: ${{ github.event.inputs.dry_run == 'true' }}
+          SKIP_PR: true
+          COMMIT_PREFIX: 'chore(sync):'
+          COMMIT_BODY: 'Sync shared configurations from control-center.'
 
-      - name: Run sync script
+  sync-projects:
+    name: Sync Projects
+    needs: sync
+    runs-on: ubuntu-latest
+    if: always() && github.event.inputs.dry_run != 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync issues to projects
         env:
           GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
-          DRY_RUN: ${{ inputs.dry_run }}
-        run: ./scripts/sync-repos.py
+        run: |
+          chmod +x scripts/sync-projects
+          ./scripts/sync-projects --verbose
