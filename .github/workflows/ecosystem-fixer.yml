@@ -1,0 +1,29 @@
+name: Ecosystem Fixer
+on:
+  workflow_call:
+    inputs:
+      run_id:
+        required: true
+        type: string
+      repository:
+        required: true
+        type: string
+      branch:
+        required: true
+        type: string
+    secrets:
+      CI_GITHUB_TOKEN:
+        required: true
+      GOOGLE_JULES_API_KEY:
+        required: false
+      ANTHROPIC_API_KEY:
+        required: false
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Attempt CI Fix
+        run: |
+          echo "Attempting to fix CI failure in ${{ inputs.repository }} (run ${{ inputs.run_id }})"
+          # Logic to fetch logs and use AI to propose a fix

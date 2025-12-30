@@ -1,6 +1,6 @@
 # Ecosystem Connector Workflow
 # 
-# This workflow connects this repository back to jbcom/control-center
+# This workflow connects this repository back to strata-game-library/control-center
 # for unified AI-powered automation across all organization repositories.
 #
 # Features:
@@ -9,7 +9,7 @@
 # - @claude interactive assistance
 # - CI failure auto-fix
 #
-# Synced from: jbcom/control-center/repository-files/always-sync
+# Synced from: strata-game-library/control-center/repository-files/always-sync
 
 name: Ecosystem Connector
 
@@ -44,7 +44,7 @@ jobs:
     if: |
       github.event_name == 'pull_request' && 
       github.event.pull_request.draft == false
-    uses: jbcom/control-center/.github/workflows/ecosystem-orchestrator.yml@main
+    uses: strata-game-library/control-center/.github/workflows/ecosystem-orchestrator.yml@main
     with:
       action: review
       pr_number: ${{ github.event.pull_request.number }}
@@ -67,7 +67,7 @@ jobs:
       (contains(github.event.comment.body, '/jules') || 
        contains(github.event.comment.body, '/cursor') ||
        contains(github.event.comment.body, '@claude'))
-    uses: jbcom/control-center/.github/workflows/ecosystem-orchestrator.yml@main
+    uses: strata-game-library/control-center/.github/workflows/ecosystem-orchestrator.yml@main
     with:
       action: delegate
       comment_body: ${{ github.event.comment.body }}
@@ -114,7 +114,7 @@ jobs:
     if: |
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'failure'
-    uses: jbcom/control-center/.github/workflows/ecosystem-fixer.yml@main
+    uses: strata-game-library/control-center/.github/workflows/ecosystem-fixer.yml@main
     with:
       run_id: ${{ github.event.workflow_run.id }}
       repository: ${{ github.repository }}

@@ -1,7 +1,6 @@
 # Strata Game Library CI
-# Org-specific CI for strata-game-library TypeScript/3D projects
-#
-# Managed by: strata-game-library/.github repo
+# Org-specific CI for strata-game-library projects
+# Managed by: strata-game-library/control-center
 
 name: CI
 
@@ -13,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   lint-and-build:
@@ -21,54 +21,127 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
-        if: hashFiles('package-lock.json') != ''
+          cache: ${{ hashFiles('pnpm-lock.yaml') != '' && 'pnpm' || 'npm' }}
+        if: hashFiles('package.json') != ''
 
-      - uses: pnpm/action-setup@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
         with:
           version: 9
         if: hashFiles('pnpm-lock.yaml') != ''
 
-      - name: Install (npm)
-        if: hashFiles('package-lock.json') != ''
-        run: npm ci
-
-      - name: Install (pnpm)
-        if: hashFiles('pnpm-lock.yaml') != ''
-        run: pnpm install --frozen-lockfile
+      - name: Install Dependencies
+        run: |
+          if [ -f "pnpm-lock.yaml" ]; then
+            pnpm install --frozen-lockfile
+          elif [ -f "package-lock.json" ]; then
+            npm ci
+          elif [ -f "package.json" ]; then
+            npm install
+          fi
 
       - name: Lint
-        run: npm run lint --if-present || pnpm lint --if-present || true
+        run: |
+          if [ -f "package.json" ]; then
+            npm run lint --if-present || pnpm run lint --if-present || true
+          fi
 
       - name: Type Check
-        run: npm run typecheck --if-present || pnpm typecheck --if-present || npx tsc --noEmit || true
+        run: |
+          if [ -f "package.json" ]; then
+            npm run typecheck --if-present || pnpm run typecheck --if-present || (npx tsc --noEmit 2>/dev/null || true)
+          fi
 
       - name: Build
-        run: npm run build --if-present || pnpm build --if-present
+        run: |
+          if [ -f "package.json" ]; then
+            npm run build --if-present || pnpm run build --if-present
+          fi
 
       - name: Test
-        run: npm test --if-present || pnpm test --if-present || true
+        run: |
+          if [ -f "package.json" ]; then
+            npm test --if-present || pnpm test --if-present || true
+          fi
 
-  # WebGL/3D specific checks
+  python-check:
+    name: Python Check
+    runs-on: ubuntu-latest
+    if: hashFiles('pyproject.toml', 'requirements.txt', 'environment.yml') != ''
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+        if: hashFiles('pyproject.toml') != ''
+      - name: Install dependencies (uv)
+        run: uv sync
+        if: hashFiles('pyproject.toml') != ''
+      - name: Lint/Check (uv)
+        run: uv run ruff check . || true
+        if: hashFiles('pyproject.toml') != ''
+      - name: Test (uv)
+        run: uv run pytest || true
+        if: hashFiles('pyproject.toml') != ''
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+        if: hashFiles('pyproject.toml') == '' && hashFiles('requirements.txt') != ''
+      - name: Install dependencies (pip)
+        run: pip install -r requirements.txt
+        if: hashFiles('pyproject.toml') == '' && hashFiles('requirements.txt') != ''
+
+  docker-check:
+    name: Docker Check
+    runs-on: ubuntu-latest
+    if: hashFiles('Dockerfile') != ''
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build Docker image (dry run)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: test:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   bundle-size:
     name: Bundle Size Check
     runs-on: ubuntu-latest
     if: hashFiles('package.json') != ''
     steps:
       - uses: actions/checkout@v4
-      
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
-        if: hashFiles('package-lock.json') != ''
-
-      - run: npm ci || pnpm install --frozen-lockfile
-      - run: npm run build --if-present || pnpm build --if-present
-      
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+        if: hashFiles('pnpm-lock.yaml') != ''
+      - name: Install
+        run: |
+          if [ -f "pnpm-lock.yaml" ]; then
+            pnpm install --frozen-lockfile
+          elif [ -f "package-lock.json" ]; then
+            npm ci
+          else
+            npm install
+          fi
+      - name: Build
+        run: npm run build --if-present || pnpm run build --if-present
       - name: Check bundle size
         run: |
           if [ -d "dist" ]; then
