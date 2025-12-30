@@ -8,12 +8,13 @@ on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
-    branches-ignore: [main]
+    branches-ignore: [main, master]
 
 permissions:
   contents: write
   pull-requests: write
   issues: write
+  actions: read
 
 jobs:
   review:
@@ -26,24 +27,22 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install vendor-connectors
-      - name: Review
+      - name: PR Review
         env:
           GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           GOOGLE_JULES_API_KEY: ${{ secrets.GOOGLE_JULES_API_KEY }}
         run: |
-          # Use vendor-connectors for review orchestration
-          python -c "
-          from vendor_connectors import GithubConnector
-          gh = GithubConnector()
-          # Post review request
-          "
+          vendor-connectors call cursor create_agent \
+            --repository "${{ github.repository }}" \
+            --ref "${{ github.event.pull_request.head.ref }}" \
+            --prompt "Review this pull request in the control-center: ${{ github.event.pull_request.html_url }}. Ensure organization-wide standards are met."
 
   delegate:
     name: Delegate Command
     if: |
       github.event_name == 'issue_comment' &&
-      (contains(github.event.comment.body, '/jules') ||
+      (contains(github.event.comment.body, '/jules') || 
        contains(github.event.comment.body, '/cursor'))
     runs-on: ubuntu-latest
     steps:
@@ -58,37 +57,37 @@ jobs:
           GOOGLE_JULES_API_KEY: ${{ secrets.GOOGLE_JULES_API_KEY }}
         run: |
           COMMENT="${{ github.event.comment.body }}"
-          ISSUE="${{ github.event.issue.number }}"
           REPO="${{ github.repository }}"
-          
-          if [[ "$COMMENT" == *"/jules"* ]]; then
-            PROMPT=$(echo "$COMMENT" | sed "s|/jules ||")
-            curl -sf -X POST "https://jules.googleapis.com/v1alpha/sessions" \
-              -H "X-Goog-Api-Key: $GOOGLE_JULES_API_KEY" \
-              -H "Content-Type: application/json" \
-              -d "{\"prompt\":\"$PROMPT\",\"sourceContext\":{\"source\":\"sources/github/${REPO}\"},\"automationMode\":\"AUTO_CREATE_PR\"}"
-            gh issue comment "$ISSUE" --body "🤖 Jules session started"
-          fi
+          ISSUE_NUMBER="${{ github.event.issue.number }}"
           
           if [[ "$COMMENT" == *"/cursor"* ]]; then
-            PROMPT=$(echo "$COMMENT" | sed "s|/cursor ||")
-            curl -sf -X POST "https://api.cursor.com/v0/agents" \
-              -H "Authorization: Bearer $CURSOR_API_KEY" \
-              -H "Content-Type: application/json" \
-              -d "{\"prompt\":{\"text\":\"$PROMPT\"},\"source\":{\"repository\":\"$REPO\"}}"
-            gh issue comment "$ISSUE" --body "🤖 Cursor agent spawned"
+            PROMPT=$(echo "$COMMENT" | sed 's/\/cursor //')
+            vendor-connectors call cursor create_agent \
+              --repository "$REPO" \
+              --prompt "$PROMPT (Context: Issue #$ISSUE_NUMBER)"
+            gh issue comment "$ISSUE_NUMBER" --body "🤖 Cursor agent dispatched."
+          fi
+          
+          if [[ "$COMMENT" == *"/jules"* ]]; then
+            PROMPT=$(echo "$COMMENT" | sed 's/\/jules //')
+            vendor-connectors call jules create_session \
+              --repo "$REPO" \
+              --prompt "$PROMPT (Context: Issue #$ISSUE_NUMBER)"
+            gh issue comment "$ISSUE_NUMBER" --body "🤖 Jules session started."
           fi
 
   fix-ci:
-    name: Fix CI
-    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure'
+    name: Auto-fix CI
+    if: |
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'failure'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install vendor-connectors
-      - name: Spawn fixer
+      - name: CI Fixer
         env:
           GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
@@ -97,10 +96,9 @@ jobs:
           BRANCH="${{ github.event.workflow_run.head_branch }}"
           RUN_ID="${{ github.event.workflow_run.id }}"
           
-          LOGS=$(gh run view "$RUN_ID" --log-failed 2>/dev/null | head -200 || echo "Failed to get logs")
+          LOGS=$(gh run view "$RUN_ID" --log-failed 2>/dev/null | head -100 || echo "Logs unavailable")
           
-          curl -sf -X POST "https://api.cursor.com/v0/agents" \
-            -H "Authorization: Bearer $CURSOR_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"prompt\":{\"text\":\"Fix CI failure on branch $BRANCH. Logs: $LOGS\"},\"source\":{\"repository\":\"$REPO\",\"ref\":\"$BRANCH\"}}"
-
+          vendor-connectors call cursor create_agent \
+            --repository "$REPO" \
+            --ref "$BRANCH" \
+            --prompt "Fix CI failure in control-center on branch $BRANCH. Error logs: $LOGS"

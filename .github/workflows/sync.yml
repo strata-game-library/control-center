@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   sync:
@@ -21,6 +22,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install vendor-connectors
+        run: pip install vendor-connectors
 
       - name: Sync files to org repos
         env:
@@ -30,37 +39,64 @@ jobs:
         run: |
           echo "Syncing repository-files to all $ORG repos..."
           
-          # Get list of repos
-          repos=$(gh repo list "$ORG" --limit 100 --json name,isArchived --jq '.[] | select(.isArchived == false) | .name')
+          # Get list of repos via vendor-connectors CLI
+          # Note: Using python -c for the list to ensure we get the right format if CLI differs
+          REPOS=$(python3 -c "from vendor_connectors import GithubConnector; print(' '.join([r['name'] for r in GithubConnector().list_repositories(org='$ORG') if not r.get('isArchived', False)]))")
           
-          for repo in $repos; do
-            # Skip control-center itself
+          for repo in $REPOS; do
+            # Skip control-center and .github
             [[ "$repo" == "control-center" ]] && continue
             [[ "$repo" == ".github" ]] && continue
             
             echo "📦 $ORG/$repo"
             
-            # Sync each file from repository-files/always-sync
+            # 1. Sync 'always-sync' files
             find repository-files/always-sync -type f | while read -r file; do
               rel_path="${file#repository-files/always-sync/}"
-              
               if [[ "$DRY_RUN" == "true" ]]; then
-                echo "  Would sync: $rel_path"
+                echo "  [DRY RUN] Would sync: $rel_path"
               else
-                content=$(base64 -w0 "$file")
-                sha=$(gh api "repos/$ORG/$repo/contents/$rel_path" --jq '.sha' 2>/dev/null || echo "")
+                # We use the CLI for the update operation
+                # We need to get the current SHA if it exists for the update to work
+                SHA=$(gh api "repos/$ORG/$repo/contents/$rel_path" --jq '.sha' 2>/dev/null || echo "")
                 
-                if [ -n "$sha" ]; then
-                  gh api -X PUT "repos/$ORG/$repo/contents/$rel_path" \
-                    -f message="chore: sync from control-center" \
-                    -f content="$content" \
-                    -f sha="$sha" >/dev/null 2>&1 && echo "  ✅ $rel_path" || echo "  ❌ $rel_path"
+                if [ -n "$SHA" ]; then
+                  vendor-connectors call github update_repository_file \
+                    --github_owner "$ORG" \
+                    --github_repo "$repo" \
+                    --file_path "$rel_path" \
+                    --file_data "$(cat "$file")" \
+                    --file_sha "$SHA" \
+                    --msg "chore: sync from control-center" > /dev/null && echo "  ✅ $rel_path" || echo "  ❌ $rel_path"
                 else
-                  gh api -X PUT "repos/$ORG/$repo/contents/$rel_path" \
-                    -f message="chore: sync from control-center" \
-                    -f content="$content" >/dev/null 2>&1 && echo "  ✅ $rel_path" || echo "  ❌ $rel_path"
+                  vendor-connectors call github update_repository_file \
+                    --github_owner "$ORG" \
+                    --github_repo "$repo" \
+                    --file_path "$rel_path" \
+                    --file_data "$(cat "$file")" \
+                    --msg "chore: sync from control-center" > /dev/null && echo "  ✅ $rel_path" || echo "  ❌ $rel_path"
+                fi
+              fi
+            done
+            
+            # 2. Sync 'initial-only' files (only if they don't exist)
+            find repository-files/initial-only -type f | while read -r file; do
+              rel_path="${file#repository-files/initial-only/}"
+              if [[ "$DRY_RUN" == "true" ]]; then
+                echo "  [DRY RUN] Would check initial: $rel_path"
+              else
+                # Check if file exists
+                EXISTS=$(gh api "repos/$ORG/$repo/contents/$rel_path" --jq '.name' 2>/dev/null || echo "")
+                if [ -z "$EXISTS" ]; then
+                  vendor-connectors call github update_repository_file \
+                    --github_owner "$ORG" \
+                    --github_repo "$repo" \
+                    --file_path "$rel_path" \
+                    --file_data "$(cat "$file")" \
+                    --msg "chore: initial bootstrap" > /dev/null && echo "  ✨ $rel_path (initialized)" || echo "  ❌ $rel_path"
+                else
+                  echo "  ⏭️ $rel_path (exists)"
                 fi
               fi
             done
           done
-
