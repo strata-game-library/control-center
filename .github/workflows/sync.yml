@@ -1,92 +1,101 @@
-name: Ecosystem Sync
+# Org Internal Sync - Cascades from enterprise control-center
+# This workflow syncs files from this control-center to all repos in the org
+#
+# Triggered by:
+# - Push to repository-files/
+# - Nightly schedule (1 hour after enterprise sync)
+# - Manual dispatch
+
+name: Sync
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
       - 'repository-files/**'
-      - 'repo-config.json'
-      - 'scripts/**'
-      - '.github/sync-always.yml'
-      - '.github/sync-initial.yml'
-  workflow_dispatch:
-    inputs:
-      dry_run:
-        description: 'Dry run (no changes)'
-        type: boolean
-        default: false
+  schedule:
+    - cron: '0 4 * * *'
 
 permissions:
   contents: read
 
 jobs:
-  validate:
-    name: Validate Configuration
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Validate config
-        run: |
-          chmod +x scripts/validate-config scripts/check-symlinks
-          ./scripts/validate-config
-          ./scripts/check-symlinks
-
-  phase-0-create-repos:
-    name: Phase 0 - Create Repos
-    needs: validate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Create missing repositories
-        env:
-          GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
-        run: |
-          chmod +x scripts/create-repos
-          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
-            ./scripts/create-repos --dry-run --verbose
-          else
-            ./scripts/create-repos --verbose
-          fi
-
   sync:
-    name: Sync Ecosystem
-    needs: phase-0-create-repos
+    name: Sync to Org Repos
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      # PHASE 1: Initial Sync (Only create if missing)
-      - name: Phase 1 - Initial Sync
-        uses: BetaHuhn/repo-file-sync-action@v1
-        with:
-          GH_PAT: ${{ secrets.CI_GITHUB_TOKEN }}
-          CONFIG_PATH: .github/sync-initial.yml
-          DRY_RUN: ${{ github.event.inputs.dry_run == 'true' }}
-          SKIP_PR: true
-          COMMIT_PREFIX: 'chore(init):'
-          COMMIT_BODY: 'Initial setup from control-center.'
-
-      # PHASE 2: Always Sync (Overwrite with latest)
-      - name: Phase 2 - Always Sync
-        uses: BetaHuhn/repo-file-sync-action@v1
-        with:
-          GH_PAT: ${{ secrets.CI_GITHUB_TOKEN }}
-          CONFIG_PATH: .github/sync-always.yml
-          DRY_RUN: ${{ github.event.inputs.dry_run == 'true' }}
-          SKIP_PR: true
-          COMMIT_PREFIX: 'chore(sync):'
-          COMMIT_BODY: 'Sync shared configurations from control-center.'
-
-  sync-projects:
-    name: Sync Projects
-    needs: sync
-    runs-on: ubuntu-latest
-    if: always() && github.event.inputs.dry_run != 'true'
-    steps:
-      - uses: actions/checkout@v4
-      - name: Sync issues to projects
+      - name: Sync to all org repos
         env:
           GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+          ORG: ${{ github.repository_owner }}
         run: |
-          chmod +x scripts/sync-projects
-          ./scripts/sync-projects --verbose
+          echo "🔄 Syncing to all repos in $ORG..."
+          
+          # Get all non-archived, non-control-center repos
+          repos=$(gh repo list "$ORG" --no-archived --json name --jq '.[].name' | grep -v "^control-center$" | grep -v "^\\.github$")
+          
+          for repo in $repos; do
+            echo ""
+            echo "=== $ORG/$repo ==="
+            
+            # Clone target repo
+            rm -rf /tmp/target
+            if ! git clone "https://x-access-token:${GH_TOKEN}@github.com/$ORG/$repo.git" /tmp/target 2>/dev/null; then
+              echo "  ⚠️ Could not clone"
+              continue
+            fi
+            cd /tmp/target
+            
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            
+            # Sync always-sync files
+            mkdir -p .github/workflows .cursor/rules
+            cp -r $GITHUB_WORKSPACE/repository-files/always-sync/.github/workflows/* .github/workflows/ 2>/dev/null || true
+            cp -r $GITHUB_WORKSPACE/repository-files/always-sync/.cursor/rules/* .cursor/rules/ 2>/dev/null || true
+            
+            # Sync language-specific rules based on what's in repo
+            if [ -f "pyproject.toml" ] || [ -f "setup.py" ] || [ -f "requirements.txt" ]; then
+              cp -r $GITHUB_WORKSPACE/repository-files/python/.cursor/rules/* .cursor/rules/ 2>/dev/null || true
+            fi
+            if [ -f "package.json" ]; then
+              cp -r $GITHUB_WORKSPACE/repository-files/nodejs/.cursor/rules/* .cursor/rules/ 2>/dev/null || true
+            fi
+            if [ -f "go.mod" ]; then
+              cp -r $GITHUB_WORKSPACE/repository-files/go/.cursor/rules/* .cursor/rules/ 2>/dev/null || true
+            fi
+            if [ -f "Cargo.toml" ]; then
+              cp -r $GITHUB_WORKSPACE/repository-files/rust/.cursor/rules/* .cursor/rules/ 2>/dev/null || true
+            fi
+            if ls *.tf >/dev/null 2>&1; then
+              cp -r $GITHUB_WORKSPACE/repository-files/terraform/.cursor/rules/* .cursor/rules/ 2>/dev/null || true
+            fi
+            
+            # Sync initial-only files (only if missing)
+            for file in CLAUDE.md AGENTS.md; do
+              if [ ! -f "$file" ] && [ -f "$GITHUB_WORKSPACE/repository-files/initial-only/$file" ]; then
+                cp "$GITHUB_WORKSPACE/repository-files/initial-only/$file" "$file"
+              fi
+            done
+            
+            # Commit and push if changes
+            if ! git diff --quiet || [ -n "$(git status --porcelain)" ]; then
+              git add -A
+              git commit -m "chore(sync): update from $ORG/control-center"
+              if git push origin HEAD 2>/dev/null; then
+                echo "  ✅ Synced"
+              else
+                echo "  ⚠️ Push failed (branch protection?)"
+              fi
+            else
+              echo "  ✅ No changes"
+            fi
+            
+            cd $GITHUB_WORKSPACE
+          done
+          
+          echo ""
+          echo "🎉 Sync complete"
