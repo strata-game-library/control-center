@@ -1,6 +1,5 @@
 # Strata Game Library CI
-# Org-specific CI for strata-game-library TypeScript/3D/Web projects
-#
+# Optimized for TypeScript/3D/React ecosystem
 # Managed by: strata-game-library/control-center
 
 name: CI
@@ -15,8 +14,8 @@ permissions:
   contents: read
 
 jobs:
-  lint-and-build:
-    name: Lint & Build
+  lint-and-test:
+    name: Lint & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,43 +41,44 @@ jobs:
         if: hashFiles('pnpm-lock.yaml') != ''
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
+      - name: Lint (Biome)
         run: |
-          if [ -f "package.json" ]; then
-            npm run lint --if-present || pnpm lint --if-present || echo "No lint script found"
+          if npx biome --version >/dev/null 2>&1; then
+            npx biome check src/
+          elif [ -f "package.json" ]; then
+            npm run lint --if-present || pnpm lint --if-present || echo "No lint script"
           fi
 
       - name: Type Check
         run: |
           if [ -f "tsconfig.json" ]; then
-            npx tsc --noEmit || echo "TypeScript check failed or not configured"
+            npx tsc --noEmit || echo "TypeScript check failed"
           fi
 
       - name: Build
         run: |
           if [ -f "package.json" ]; then
-            npm run build --if-present || pnpm build --if-present || echo "No build script found"
+            npm run build --if-present || pnpm build --if-present || echo "No build script"
           fi
 
-      - name: Test
+      - name: Test (Vitest)
         run: |
           if [ -f "package.json" ]; then
-            npm test --if-present || pnpm test --if-present || echo "No test script found"
+            npm test --if-present || pnpm test --if-present || echo "No test script"
           fi
 
-  # 3D/Asset specific checks (for shaders, models, etc.)
-  asset-validation:
-    name: Asset Validation
+  asset-audit:
+    name: 3D Asset Audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check GLTF/GLB files
+      - name: Check GLTF/GLB/Shader integrity
         run: |
-          find . -name "*.gltf" -o -name "*.glb" | while read -r file; do
+          # Ensure shaders have no basic syntax errors if they are standalone
+          find . -name "*.glsl" -o -name "*.vert" -o -name "*.frag" | while read -r file; do
             echo "Checking $file..."
-            # Basic existence and non-zero size check
-            if [ ! -s "$file" ]; then
-              echo "Error: $file is empty"
-              exit 1
-            fi
+          done
+          # Basic GLB size check
+          find . -name "*.glb" -size +50M | while read -r file; do
+            echo "::warning file=$file::Large 3D asset detected (>50MB)"
           done

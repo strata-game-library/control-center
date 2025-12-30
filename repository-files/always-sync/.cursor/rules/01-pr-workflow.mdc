@@ -1,0 +1,25 @@
+---
+description: PR creation and review workflow
+globs: "**/*"
+---
+
+# 🌿 Strata PR Workflow
+
+## Creating Pull Requests
+
+1. **Keep it Small** - One feature or fix per PR.
+2. **Conventional Commits**:
+   - `feat(core): add terrain collision`
+   - `fix(shaders): resolve water transparency bug`
+   - `docs: update API reference`
+3. **Draft First** - Start as a draft if not ready for review.
+
+## AI Review Trigger
+
+Request AI review by mentioning `@claude` or using `/cursor review` in comments.
+
+## Merging
+
+1. Ensure **CI** passes.
+2. Get at least one human or AI approval.
+3. Squash and merge to keep `main` history clean.

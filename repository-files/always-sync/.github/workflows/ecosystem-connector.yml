@@ -38,11 +38,10 @@ jobs:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           GOOGLE_JULES_API_KEY: ${{ secrets.GOOGLE_JULES_API_KEY }}
         run: |
-          # Use vendor-connectors to trigger a review
           vendor-connectors call cursor create_agent \
             --repository "${{ github.repository }}" \
             --ref "${{ github.event.pull_request.head.ref }}" \
-            --prompt "Review this pull request: ${{ github.event.pull_request.html_url }}. Focus on performance and 3D rendering best practices."
+            --prompt "Review this pull request: ${{ github.event.pull_request.html_url }}. Focus on performance, 3D rendering best practices, and ensuring organization-wide standards are met."
 
   delegate:
     name: Delegate Command
@@ -71,7 +70,7 @@ jobs:
             vendor-connectors call cursor create_agent \
               --repository "$REPO" \
               --prompt "$PROMPT (Context: Issue #$ISSUE_NUMBER)"
-            gh issue comment "$ISSUE_NUMBER" --body "🤖 Cursor agent dispatched to handle this request."
+            gh issue comment "$ISSUE_NUMBER" --body "🤖 Cursor agent dispatched."
           fi
           
           if [[ "$COMMENT" == *"/jules"* ]]; then
@@ -79,7 +78,7 @@ jobs:
             vendor-connectors call jules create_session \
               --repo "$REPO" \
               --prompt "$PROMPT (Context: Issue #$ISSUE_NUMBER)"
-            gh issue comment "$ISSUE_NUMBER" --body "🤖 Jules session started for this task."
+            gh issue comment "$ISSUE_NUMBER" --body "🤖 Jules session started."
           fi
 
   fix-ci:

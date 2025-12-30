@@ -1,4 +1,4 @@
-name: Sync Files
+name: Ecosystem Sync
 
 on:
   push:
@@ -37,55 +37,42 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run }}
           ORG: strata-game-library
         run: |
-          echo "Syncing repository-files to all $ORG repos..."
+          echo "Syncing Strata Ecosystem..."
           
-          # Get list of repos via vendor-connectors CLI
-          # Note: Using python -c for the list to ensure we get the right format if CLI differs
+          # Get all repos using vendor-connectors
           REPOS=$(python3 -c "from vendor_connectors import GithubConnector; print(' '.join([r['name'] for r in GithubConnector().list_repositories(org='$ORG') if not r.get('isArchived', False)]))")
           
           for repo in $REPOS; do
-            # Skip control-center and .github
             [[ "$repo" == "control-center" ]] && continue
             [[ "$repo" == ".github" ]] && continue
             
             echo "📦 $ORG/$repo"
             
-            # 1. Sync 'always-sync' files
+            # PHASE 1: Always Sync (Overwrite)
             find repository-files/always-sync -type f | while read -r file; do
               rel_path="${file#repository-files/always-sync/}"
               if [[ "$DRY_RUN" == "true" ]]; then
-                echo "  [DRY RUN] Would sync: $rel_path"
+                echo "  [ALWAYS] Would sync: $rel_path"
               else
-                # We use the CLI for the update operation
-                # We need to get the current SHA if it exists for the update to work
+                # Get SHA for update
                 SHA=$(gh api "repos/$ORG/$repo/contents/$rel_path" --jq '.sha' 2>/dev/null || echo "")
                 
-                if [ -n "$SHA" ]; then
-                  vendor-connectors call github update_repository_file \
-                    --github_owner "$ORG" \
-                    --github_repo "$repo" \
-                    --file_path "$rel_path" \
-                    --file_data "$(cat "$file")" \
-                    --file_sha "$SHA" \
-                    --msg "chore: sync from control-center" > /dev/null && echo "  ✅ $rel_path" || echo "  ❌ $rel_path"
-                else
-                  vendor-connectors call github update_repository_file \
-                    --github_owner "$ORG" \
-                    --github_repo "$repo" \
-                    --file_path "$rel_path" \
-                    --file_data "$(cat "$file")" \
-                    --msg "chore: sync from control-center" > /dev/null && echo "  ✅ $rel_path" || echo "  ❌ $rel_path"
-                fi
+                vendor-connectors call github update_repository_file \
+                  --github_owner "$ORG" \
+                  --github_repo "$repo" \
+                  --file_path "$rel_path" \
+                  --file_data "$(cat "$file")" \
+                  ${SHA:+--file_sha "$SHA"} \
+                  --msg "chore(sync): update from control-center" > /dev/null && echo "  ✅ $rel_path" || echo "  ❌ $rel_path"
               fi
             done
             
-            # 2. Sync 'initial-only' files (only if they don't exist)
+            # PHASE 2: Initial Only (Create missing)
             find repository-files/initial-only -type f | while read -r file; do
               rel_path="${file#repository-files/initial-only/}"
               if [[ "$DRY_RUN" == "true" ]]; then
-                echo "  [DRY RUN] Would check initial: $rel_path"
+                echo "  [INITIAL] Would check: $rel_path"
               else
-                # Check if file exists
                 EXISTS=$(gh api "repos/$ORG/$repo/contents/$rel_path" --jq '.name' 2>/dev/null || echo "")
                 if [ -z "$EXISTS" ]; then
                   vendor-connectors call github update_repository_file \
@@ -93,9 +80,7 @@ jobs:
                     --github_repo "$repo" \
                     --file_path "$rel_path" \
                     --file_data "$(cat "$file")" \
-                    --msg "chore: initial bootstrap" > /dev/null && echo "  ✨ $rel_path (initialized)" || echo "  ❌ $rel_path"
-                else
-                  echo "  ⏭️ $rel_path (exists)"
+                    --msg "chore(init): bootstrap from control-center" > /dev/null && echo "  ✨ $rel_path (initialized)" || echo "  ❌ $rel_path"
                 fi
               fi
             done
