@@ -55,6 +55,7 @@ jobs:
           GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
         run: |
+          export PATH="$PATH:$HOME/.local/bin"
           vendor-connectors call cursor create_agent \
             --repository "${{ inputs.repository }}" \
             --ref "${{ inputs.ref }}" \
@@ -77,6 +78,7 @@ jobs:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           GOOGLE_JULES_API_KEY: ${{ secrets.GOOGLE_JULES_API_KEY }}
         run: |
+          export PATH="$PATH:$HOME/.local/bin"
           COMMENT="${{ inputs.comment_body }}"
           REPO="${{ inputs.repository }}"
           ISSUE_NUMBER="${{ inputs.issue_number }}"
@@ -113,6 +115,7 @@ jobs:
           GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
         run: |
+          export PATH="$PATH:$HOME/.local/bin"
           REPO="${{ inputs.repository }}"
           BRANCH="${{ inputs.ref }}"
           RUN_ID="${{ inputs.run_id }}"
