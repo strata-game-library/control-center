@@ -1,3 +1,8 @@
+# Ecosystem Connector for control-center
+#
+# Even the control-center repo uses the ecosystem-orchestrator
+# to ensure consistent AI behavior across the org.
+
 name: Ecosystem Connector
 
 on:
@@ -20,23 +25,15 @@ jobs:
   review:
     name: AI Review
     if: github.event_name == 'pull_request' && !github.event.pull_request.draft
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install vendor-connectors
-      - name: PR Review
-        env:
-          GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
-          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-          GOOGLE_JULES_API_KEY: ${{ secrets.GOOGLE_JULES_API_KEY }}
-        run: |
-          vendor-connectors call cursor create_agent \
-            --repository "${{ github.repository }}" \
-            --ref "${{ github.event.pull_request.head.ref }}" \
-            --prompt "Review this pull request in the control-center: ${{ github.event.pull_request.html_url }}. Ensure organization-wide standards are met."
+    uses: strata-game-library/control-center/.github/workflows/ecosystem-orchestrator.yml@main
+    with:
+      action: review
+      pr_number: ${{ github.event.pull_request.number }}
+      repository: ${{ github.repository }}
+      ref: ${{ github.event.pull_request.head.ref }}
+    secrets:
+      CI_GITHUB_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+      CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
 
   delegate:
     name: Delegate Command
@@ -44,61 +41,28 @@ jobs:
       github.event_name == 'issue_comment' &&
       (contains(github.event.comment.body, '/jules') || 
        contains(github.event.comment.body, '/cursor'))
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install vendor-connectors
-      - name: Delegate
-        env:
-          GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
-          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-          GOOGLE_JULES_API_KEY: ${{ secrets.GOOGLE_JULES_API_KEY }}
-        run: |
-          COMMENT="${{ github.event.comment.body }}"
-          REPO="${{ github.repository }}"
-          ISSUE_NUMBER="${{ github.event.issue.number }}"
-          
-          if [[ "$COMMENT" == *"/cursor"* ]]; then
-            PROMPT=$(echo "$COMMENT" | sed 's/\/cursor //')
-            vendor-connectors call cursor create_agent \
-              --repository "$REPO" \
-              --prompt "$PROMPT (Context: Issue #$ISSUE_NUMBER)"
-            gh issue comment "$ISSUE_NUMBER" --body "🤖 Cursor agent dispatched."
-          fi
-          
-          if [[ "$COMMENT" == *"/jules"* ]]; then
-            PROMPT=$(echo "$COMMENT" | sed 's/\/jules //')
-            vendor-connectors call jules create_session \
-              --repo "$REPO" \
-              --prompt "$PROMPT (Context: Issue #$ISSUE_NUMBER)"
-            gh issue comment "$ISSUE_NUMBER" --body "🤖 Jules session started."
-          fi
+    uses: strata-game-library/control-center/.github/workflows/ecosystem-orchestrator.yml@main
+    with:
+      action: delegate
+      comment_body: ${{ github.event.comment.body }}
+      issue_number: ${{ github.event.issue.number }}
+      repository: ${{ github.repository }}
+    secrets:
+      CI_GITHUB_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+      CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+      GOOGLE_JULES_API_KEY: ${{ secrets.GOOGLE_JULES_API_KEY }}
 
   fix-ci:
     name: Auto-fix CI
     if: |
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'failure'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install vendor-connectors
-      - name: CI Fixer
-        env:
-          GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
-          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-        run: |
-          REPO="${{ github.repository }}"
-          BRANCH="${{ github.event.workflow_run.head_branch }}"
-          RUN_ID="${{ github.event.workflow_run.id }}"
-          
-          LOGS=$(gh run view "$RUN_ID" --log-failed 2>/dev/null | head -100 || echo "Logs unavailable")
-          
-          vendor-connectors call cursor create_agent \
-            --repository "$REPO" \
-            --ref "$BRANCH" \
-            --prompt "Fix CI failure in control-center on branch $BRANCH. Error logs: $LOGS"
+    uses: strata-game-library/control-center/.github/workflows/ecosystem-orchestrator.yml@main
+    with:
+      action: fix-ci
+      run_id: ${{ github.event.workflow_run.id }}
+      repository: ${{ github.repository }}
+      ref: ${{ github.event.workflow_run.head_branch }}
+    secrets:
+      CI_GITHUB_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+      CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}

@@ -1,0 +1,125 @@
+name: Ecosystem Orchestrator
+
+on:
+  workflow_call:
+    inputs:
+      action:
+        required: true
+        type: string
+      repository:
+        required: true
+        type: string
+      pr_number:
+        required: false
+        type: number
+      comment_body:
+        required: false
+        type: string
+      issue_number:
+        required: false
+        type: number
+      ref:
+        required: false
+        type: string
+      run_id:
+        required: false
+        type: string
+    secrets:
+      CI_GITHUB_TOKEN:
+        required: true
+      CURSOR_API_KEY:
+        required: false
+      GOOGLE_JULES_API_KEY:
+        required: false
+
+jobs:
+  review:
+    name: AI Review
+    if: inputs.action == 'review'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.CI_GITHUB_TOKEN }}
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      
+      - run: pip install vendor-connectors
+      
+      - name: PR Review
+        env:
+          GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          vendor-connectors call cursor create_agent \
+            --repository "${{ inputs.repository }}" \
+            --ref "${{ inputs.ref }}" \
+            --prompt "Review this pull request in ${{ inputs.repository }}. Focus on performance, 3D rendering best practices, and organization standards."
+
+  delegate:
+    name: Delegate Command
+    if: inputs.action == 'delegate'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      
+      - run: pip install vendor-connectors
+      
+      - name: Delegate
+        env:
+          GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          GOOGLE_JULES_API_KEY: ${{ secrets.GOOGLE_JULES_API_KEY }}
+        run: |
+          COMMENT="${{ inputs.comment_body }}"
+          REPO="${{ inputs.repository }}"
+          ISSUE_NUMBER="${{ inputs.issue_number }}"
+          
+          if [[ "$COMMENT" == *"/cursor"* ]]; then
+            PROMPT=$(echo "$COMMENT" | sed 's/\/cursor //')
+            vendor-connectors call cursor create_agent \
+              --repository "$REPO" \
+              --prompt "$PROMPT (Context: Issue #$ISSUE_NUMBER)"
+            gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "🤖 Cursor agent dispatched."
+          fi
+          
+          if [[ "$COMMENT" == *"/jules"* ]]; then
+            PROMPT=$(echo "$COMMENT" | sed 's/\/jules //')
+            vendor-connectors call jules create_session \
+              --repo "$REPO" \
+              --prompt "$PROMPT (Context: Issue #$ISSUE_NUMBER)"
+            gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "🤖 Jules session started."
+          fi
+
+  fix-ci:
+    name: Auto-fix CI
+    if: inputs.action == 'fix-ci'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      
+      - run: pip install vendor-connectors
+      
+      - name: CI Fixer
+        env:
+          GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          REPO="${{ inputs.repository }}"
+          BRANCH="${{ inputs.ref }}"
+          RUN_ID="${{ inputs.run_id }}"
+          
+          LOGS=$(gh run view "$RUN_ID" --repo "$REPO" --log-failed 2>/dev/null | head -100 || echo "Logs unavailable")
+          
+          vendor-connectors call cursor create_agent \
+            --repository "$REPO" \
+            --ref "$BRANCH" \
+            --prompt "Fix CI failure in $REPO on branch $BRANCH. Error logs: $LOGS"
