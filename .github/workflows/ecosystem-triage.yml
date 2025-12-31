@@ -51,7 +51,7 @@ jobs:
       - name: Triage PR Feedback
         id: triage
         env:
-          GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN || github.token }}
+          GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
         run: |
           # ══════════════════════════════════════════════════════════
           # RESOLVE PR CONTEXT
@@ -146,7 +146,7 @@ jobs:
           ---
           <sub>🤖 Managed by Ecosystem Triage</sub>" \
               --label "synthesis" \
-              --json number --jq '.number')
+              2>/dev/null | grep -oE '[0-9]+$')
             
             # Link tracking issue to PR
             gh pr comment $PR_NUM --repo "${{ github.repository }}" --body "📦 **Tracking:** #$TRACKING_ISSUE" 2>/dev/null || true
