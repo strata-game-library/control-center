@@ -32,7 +32,7 @@ jobs:
       repository: ${{ github.repository }}
       ref: ${{ github.event.pull_request.head.ref }}
     secrets:
-      CI_GITHUB_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+      CI_GITHUB_TOKEN: ${{ secrets.CI_GITHUB_TOKEN || github.token }}
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
 
   delegate:
@@ -48,7 +48,7 @@ jobs:
       issue_number: ${{ github.event.issue.number }}
       repository: ${{ github.repository }}
     secrets:
-      CI_GITHUB_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+      CI_GITHUB_TOKEN: ${{ secrets.CI_GITHUB_TOKEN || github.token }}
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       GOOGLE_JULES_API_KEY: ${{ secrets.GOOGLE_JULES_API_KEY }}
 
@@ -64,5 +64,5 @@ jobs:
       repository: ${{ github.repository }}
       ref: ${{ github.event.workflow_run.head_branch }}
     secrets:
-      CI_GITHUB_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+      CI_GITHUB_TOKEN: ${{ secrets.CI_GITHUB_TOKEN || github.token }}
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}

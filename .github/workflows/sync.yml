@@ -33,7 +33,7 @@ jobs:
 
       - name: Sync to all org repos
         env:
-          GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN || github.token }}
           ORG: ${{ github.repository_owner }}
         run: |
           echo "Syncing to all repos in $ORG..."
