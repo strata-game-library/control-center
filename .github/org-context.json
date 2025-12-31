@@ -1,0 +1,12 @@
+{
+  "org": "strata-game-library",
+  "domain": "strata.game",
+  "parentOrg": "jbcom",
+  "focus": [
+  "Procedural graphics",
+  "Game engines",
+  "WebGPU"
+],
+  "syncedFrom": "jbcom/control-center",
+  "syncedAt": "2025-12-31T01:06:46Z"
+}
